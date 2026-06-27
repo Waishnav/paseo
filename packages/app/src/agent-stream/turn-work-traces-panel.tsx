@@ -1,4 +1,4 @@
-import React, { memo, useMemo, type ReactNode } from "react";
+import React, { memo, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -41,12 +41,13 @@ export const TurnWorkTracesHeader = memo(function TurnWorkTracesHeader({
   );
 
   const Chevron = isExpanded ? ThemedChevronDown : ThemedChevronRight;
+  const accessibilityState = useMemo(() => ({ expanded: isExpanded }), [isExpanded]);
 
   return (
     <Pressable
       onPress={onToggle}
       accessibilityRole="button"
-      accessibilityState={{ expanded: isExpanded }}
+      accessibilityState={accessibilityState}
       accessibilityLabel={accessibilityLabel}
       testID="turn-work-traces-header"
     >
@@ -84,6 +85,43 @@ export const TurnWorkTracesPanel = memo(function TurnWorkTracesPanel({
         </View>
       ) : null}
     </View>
+  );
+});
+
+export const UserTurnWorkTracesSection = memo(function UserTurnWorkTracesSection({
+  children,
+  timing,
+  turnKey,
+  isExpanded,
+  onToggleTurn,
+  traceItems,
+  renderTraceLayoutItem,
+}: {
+  children: ReactNode;
+  timing: TurnTiming | null;
+  turnKey: string;
+  isExpanded: boolean;
+  onToggleTurn: (turnKey: string) => void;
+  traceItems: StreamLayoutItem[];
+  renderTraceLayoutItem: (layoutItem: StreamLayoutItem) => ReactNode;
+}) {
+  const handleToggle = useCallback(() => {
+    onToggleTurn(turnKey);
+  }, [onToggleTurn, turnKey]);
+
+  return (
+    <>
+      {children}
+      <View>
+        <TurnWorkTracesPanel
+          timing={timing}
+          isExpanded={isExpanded}
+          onToggle={handleToggle}
+          traceItems={traceItems}
+          renderTraceLayoutItem={renderTraceLayoutItem}
+        />
+      </View>
+    </>
   );
 });
 

@@ -49,7 +49,10 @@ import type {
 } from "@getpaseo/protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useSessionStore } from "@/stores/session-store";
-import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
+import {
+  buildWorkspaceExplorerStateKey,
+  useFileExplorerActions,
+} from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import type { ToastApi } from "@/components/toast-host";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
@@ -67,7 +70,12 @@ import {
   shouldShowTurnWorkTracesHeader,
   completedTurnFooterShowsTimestampOnly,
 } from "./turn-work-traces";
-import { TurnWorkTracesPanel } from "./turn-work-traces-panel";
+import { UserTurnWorkTracesSection } from "./turn-work-traces-panel";
+import {
+  buildTurnFileChangeSummariesByTurnKey,
+  shouldShowTurnFileChangesCard,
+} from "./turn-file-changes";
+import { TurnFileChangesCard } from "./turn-file-changes-card";
 import {
   type BottomAnchorLocalRequest,
   type BottomAnchorRouteRequest,
@@ -129,6 +137,7 @@ function renderStreamItemWithTurnFooter(input: {
   layoutItem: StreamLayoutItem;
   strategy: TurnContentStrategy;
   completedFooterShowsTimestampOnly?: boolean;
+  fileChangesCard?: ReactNode;
 }): ReactNode {
   if (!input.content) {
     return null;
@@ -144,6 +153,9 @@ function renderStreamItemWithTurnFooter(input: {
       showCompletedTimestampOnly={input.completedFooterShowsTimestampOnly}
     />
   ) : null;
+  const fileChangesSlot = input.fileChangesCard ? (
+    <View style={stylesheet.turnFileChangesSlot}>{input.fileChangesCard}</View>
+  ) : null;
   const content = (
     <StreamItemWrapper gapBelow={input.layoutItem.gapBelow}>{input.content}</StreamItemWrapper>
   );
@@ -153,6 +165,7 @@ function renderStreamItemWithTurnFooter(input: {
       <>
         {footer}
         {content}
+        {fileChangesSlot}
       </>
     );
   }
@@ -160,6 +173,7 @@ function renderStreamItemWithTurnFooter(input: {
   return (
     <>
       {content}
+      {fileChangesSlot}
       {footer}
     </>
   );
@@ -185,30 +199,6 @@ function renderListEmptyComponent(input: {
       <Text style={stylesheet.emptyStateText}>{input.emptyText}</Text>
     </View>
   );
-}
-
-function renderHistoryStreamItem(input: {
-  item: StreamItem;
-  layoutItemById: Map<string, StreamLayoutItem>;
-  renderStreamItem: (layoutItem: StreamLayoutItem) => ReactNode;
-}): ReactNode {
-  const layoutItem = input.layoutItemById.get(input.item.id);
-  if (!layoutItem) {
-    return null;
-  }
-  return input.renderStreamItem(layoutItem);
-}
-
-function renderLiveHeadStreamItem(input: {
-  item: StreamItem;
-  layoutItemById: Map<string, StreamLayoutItem>;
-  renderStreamItem: (layoutItem: StreamLayoutItem) => ReactNode;
-}): ReactNode {
-  const layoutItem = input.layoutItemById.get(input.item.id);
-  if (!layoutItem) {
-    return null;
-  }
-  return input.renderStreamItem(layoutItem);
 }
 
 export interface AgentStreamViewHandle {
@@ -289,6 +279,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     );
     const openFileExplorerForCheckout = usePanelStore((state) => state.openFileExplorerForCheckout);
     const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
+    const setDiffExpandedPathsForWorkspace = usePanelStore(
+      (state) => state.setDiffExpandedPathsForWorkspace,
+    );
 
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? agent.serverId ?? "";
@@ -439,6 +432,42 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         }),
       [agent.status, orderedFullStreamItems],
     );
+    const turnFileChangeSummariesByTurnKey = useMemo(
+      () =>
+        buildTurnFileChangeSummariesByTurnKey({
+          bundlesByTurnKey: turnWorkTraceLayout.bundlesByTurnKey,
+          items: orderedFullStreamItems,
+          cwd: workspaceRoot || undefined,
+        }),
+      [orderedFullStreamItems, turnWorkTraceLayout.bundlesByTurnKey, workspaceRoot],
+    );
+    const workspaceExplorerStateKey = useMemo(
+      () =>
+        buildWorkspaceExplorerStateKey({
+          workspaceId: agent.workspaceId,
+          workspaceRoot,
+        }),
+      [agent.workspaceId, workspaceRoot],
+    );
+    const handleOpenChangesReviewForTurn = useStableEvent((turnKey: string) => {
+      const summary = turnFileChangeSummariesByTurnKey.get(turnKey);
+      const checkout = {
+        serverId: resolvedServerId,
+        cwd: agent.cwd,
+        isGit: agent.projectPlacement?.checkout?.isGit ?? true,
+      };
+      openFileExplorerForCheckout({
+        isCompact: isMobile,
+        checkout,
+      });
+      setExplorerTabForCheckout({ ...checkout, tab: "changes" });
+      if (summary && workspaceExplorerStateKey) {
+        setDiffExpandedPathsForWorkspace(
+          workspaceExplorerStateKey,
+          summary.files.map((file) => file.relativePath),
+        );
+      }
+    });
     const filteredStreamSegments = useMemo(
       () => ({
         historyVirtualized: filterStreamItemsForMainList(
@@ -684,15 +713,36 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       return itemById;
     }, [streamLayout.liveHead]);
 
+    const traceLayoutItemsByTurnKey = useMemo(() => {
+      const map = new Map<string, StreamLayoutItem[]>();
+      for (const [userMessageId, bundle] of turnWorkTraceLayout.userMessageIdToBundle) {
+        if (!bundle?.hasTrace || bundle.isInFlight) {
+          continue;
+        }
+        const traceLayoutItems = orderedFullStreamItems
+          .filter((candidate) => bundle.traceItemIds.has(candidate.id))
+          .map(
+            (traceItem) =>
+              layoutHistoryItemById.get(traceItem.id) ?? layoutLiveHeadItemById.get(traceItem.id),
+          )
+          .filter((candidate): candidate is StreamLayoutItem => candidate !== undefined);
+        map.set(userMessageId, traceLayoutItems);
+      }
+      return map;
+    }, [
+      layoutHistoryItemById,
+      layoutLiveHeadItemById,
+      orderedFullStreamItems,
+      turnWorkTraceLayout.userMessageIdToBundle,
+    ]);
+
     const renderTraceLayoutItemOnly = useCallback(
       (layoutItem: StreamLayoutItem) => {
         const content = renderStreamItemContent(layoutItem);
         if (!content) {
           return null;
         }
-        return (
-          <StreamItemWrapper gapBelow={layoutItem.gapBelow}>{content}</StreamItemWrapper>
-        );
+        return <StreamItemWrapper gapBelow={layoutItem.gapBelow}>{content}</StreamItemWrapper>;
       },
       [renderStreamItemContent],
     );
@@ -706,17 +756,38 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             assistantMessageId: layoutItem.item.id,
             bundlesByTurnKey: turnWorkTraceLayout.bundlesByTurnKey,
           });
+        const fileChangeSummary =
+          layoutItem.item.kind === "assistant_message"
+            ? shouldShowTurnFileChangesCard({
+                assistantMessageId: layoutItem.item.id,
+                bundlesByTurnKey: turnWorkTraceLayout.bundlesByTurnKey,
+                summariesByTurnKey: turnFileChangeSummariesByTurnKey,
+              })
+            : null;
+        const fileChangesCard = fileChangeSummary ? (
+          <TurnFileChangesCard
+            summary={fileChangeSummary}
+            onReviewTurn={handleOpenChangesReviewForTurn}
+            onOpenFile={handleToolCallOpenFile}
+          />
+        ) : null;
         return renderStreamItemWithTurnFooter({
           content,
           layoutItem,
           strategy: streamRenderStrategy,
           completedFooterShowsTimestampOnly,
+          fileChangesCard,
         });
       },
-      [renderStreamItemContent, streamRenderStrategy, turnWorkTraceLayout.bundlesByTurnKey],
+      [
+        handleOpenChangesReviewForTurn,
+        handleToolCallOpenFile,
+        renderStreamItemContent,
+        streamRenderStrategy,
+        turnFileChangeSummariesByTurnKey,
+        turnWorkTraceLayout.bundlesByTurnKey,
+      ],
     );
-
-    const renderStreamItem = renderLayoutItemForStream;
 
     const renderRow = useCallback(
       (item: StreamItem) => {
@@ -733,40 +804,37 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         if (!shouldShowTurnWorkTracesHeader({ bundle })) {
           return streamNode;
         }
-        streamNode = (
-          <StreamItemWrapper gapBelow={0}>{renderStreamItemContent(layoutItem)}</StreamItemWrapper>
-        );
-        const traceLayoutItems = orderedFullStreamItems
-          .filter((candidate) => bundle?.traceItemIds.has(candidate.id))
-          .map((traceItem) => layoutHistoryItemById.get(traceItem.id) ?? layoutLiveHeadItemById.get(traceItem.id))
-          .filter((candidate): candidate is StreamLayoutItem => candidate !== undefined);
         const turnKey = item.id;
-        const panel = (
-          <StreamItemWrapper gapBelow={layoutItem.gapBelow}>
-            <TurnWorkTracesPanel
-              timing={bundle?.timing ?? null}
-              isExpanded={expandedTurnWorkTraceKeys.has(turnKey)}
-              onToggle={() => toggleTurnWorkTraces(turnKey)}
-              traceItems={traceLayoutItems}
-              renderTraceLayoutItem={renderTraceLayoutItemOnly}
-            />
-          </StreamItemWrapper>
-        );
+        const traceItemsForTurn = traceLayoutItemsByTurnKey.get(turnKey);
+        if (!traceItemsForTurn) {
+          return streamNode;
+        }
         return (
-          <>
-            {streamNode}
-            {panel}
-          </>
+          <StreamItemWrapper gapBelow={layoutItem.gapBelow}>
+            <UserTurnWorkTracesSection
+              timing={bundle?.timing ?? null}
+              turnKey={turnKey}
+              isExpanded={expandedTurnWorkTraceKeys.has(turnKey)}
+              onToggleTurn={toggleTurnWorkTraces}
+              traceItems={traceItemsForTurn}
+              renderTraceLayoutItem={renderTraceLayoutItemOnly}
+            >
+              <StreamItemWrapper gapBelow={0}>
+                {renderStreamItemContent(layoutItem)}
+              </StreamItemWrapper>
+            </UserTurnWorkTracesSection>
+          </StreamItemWrapper>
         );
       },
       [
         expandedTurnWorkTraceKeys,
         layoutHistoryItemById,
         layoutLiveHeadItemById,
-        orderedFullStreamItems,
         renderLayoutItemForStream,
+        renderStreamItemContent,
         renderTraceLayoutItemOnly,
         toggleTurnWorkTraces,
+        traceLayoutItemsByTurnKey,
         turnWorkTraceLayout.userMessageIdToBundle,
       ],
     );
@@ -795,29 +863,26 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       });
     }, [bottomTurnFooterHost, turnWorkTraceLayout.bundlesByTurnKey]);
 
-    const turnFooterNode = useMemo(
-      () => {
-        if (!showRunningTurnFooter && !bottomTurnFooterHost) {
-          return null;
-        }
-        return (
-          <TurnFooter
-            isRunning={showRunningTurnFooter}
-            inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
-            host={bottomTurnFooterHost}
-            strategy={streamRenderStrategy}
-            showCompletedTimestampOnly={bottomFooterShowsTimestampOnly}
-          />
-        );
-      },
-      [
-        showRunningTurnFooter,
-        baseRenderModel.turnTiming.runningStartedAt,
-        bottomTurnFooterHost,
-        bottomFooterShowsTimestampOnly,
-        streamRenderStrategy,
-      ],
-    );
+    const turnFooterNode = useMemo(() => {
+      if (!showRunningTurnFooter && !bottomTurnFooterHost) {
+        return null;
+      }
+      return (
+        <TurnFooter
+          isRunning={showRunningTurnFooter}
+          inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
+          host={bottomTurnFooterHost}
+          strategy={streamRenderStrategy}
+          showCompletedTimestampOnly={bottomFooterShowsTimestampOnly}
+        />
+      );
+    }, [
+      showRunningTurnFooter,
+      baseRenderModel.turnTiming.runningStartedAt,
+      bottomTurnFooterHost,
+      bottomFooterShowsTimestampOnly,
+      streamRenderStrategy,
+    ]);
     const renderModel = useMemo<AgentStreamRenderModel>(() => {
       return {
         ...baseRenderModel,
@@ -1320,6 +1385,14 @@ const stylesheet = StyleSheet.create((theme) => ({
     maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
+  },
+  turnFileChangesSlot: {
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: "center",
+    paddingHorizontal: theme.spacing[2],
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
   },
   emptyState: {
     flex: 1,

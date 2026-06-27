@@ -22,7 +22,7 @@ const MAX_VISIBLE_FILES = 6;
 
 export interface TurnFileChangesCardProps {
   summary: TurnFileChangeSummary;
-  onReview: () => void;
+  onReviewTurn: (turnKey: string) => void;
   onOpenFile?: (relativePath: string) => void;
 }
 
@@ -33,7 +33,7 @@ function fileRowPressableStyle(state: PressableStateCallbackType): StyleProp<Vie
 
 export const TurnFileChangesCard = memo(function TurnFileChangesCard({
   summary,
-  onReview,
+  onReviewTurn,
   onOpenFile,
 }: TurnFileChangesCardProps) {
   const { t } = useTranslation();
@@ -69,8 +69,8 @@ export const TurnFileChangesCard = memo(function TurnFileChangesCard({
   const hiddenCount = summary.files.length - visibleFiles.length;
 
   const handleReview = useCallback(() => {
-    onReview();
-  }, [onReview]);
+    onReviewTurn(summary.turnKey);
+  }, [onReviewTurn, summary.turnKey]);
 
   return (
     <View style={stylesheet.card} testID="turn-file-changes-card">
