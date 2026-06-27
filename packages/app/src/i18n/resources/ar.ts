@@ -176,6 +176,15 @@ export const ar: TranslationResources = {
       workedFor: "عمل لمدة {{duration}}",
       accessibilityLabel: "{{durationLabel}}، سجل العمل",
     },
+    fileChanges: {
+      editedFiles: "عدّل {{count}} ملفات",
+      createdFiles: "أنشأ {{count}} ملفات",
+      deletedFiles: "حذف {{count}} ملفات",
+      changedFiles: "غيّر {{count}} ملفات",
+      lineChanges: "{{additions}} إضافات، {{deletions}} حذف",
+      review: "مراجعة",
+      andMore: "و{{count}} أخرى",
+    },
     permission: {
       plan: "يخطط",
       required: "الإذن مطلوب",

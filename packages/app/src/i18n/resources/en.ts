@@ -174,6 +174,15 @@ export const en = {
       workedFor: "Worked for {{duration}}",
       accessibilityLabel: "{{durationLabel}}, work traces",
     },
+    fileChanges: {
+      editedFiles: "Edited {{count}} files",
+      createdFiles: "Created {{count}} files",
+      deletedFiles: "Deleted {{count}} files",
+      changedFiles: "Changed {{count}} files",
+      lineChanges: "{{additions}} additions, {{deletions}} deletions",
+      review: "Review",
+      andMore: "and {{count}} more",
+    },
     permission: {
       plan: "Plan",
       required: "Permission Required",

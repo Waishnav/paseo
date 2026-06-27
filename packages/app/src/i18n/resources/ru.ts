@@ -176,6 +176,15 @@ export const ru: TranslationResources = {
       workedFor: "Работал {{duration}}",
       accessibilityLabel: "{{durationLabel}}, следы работы",
     },
+    fileChanges: {
+      editedFiles: "Изменено файлов: {{count}}",
+      createdFiles: "Создано файлов: {{count}}",
+      deletedFiles: "Удалено файлов: {{count}}",
+      changedFiles: "Изменено файлов: {{count}}",
+      lineChanges: "+{{additions}} / −{{deletions}}",
+      review: "Просмотр",
+      andMore: "и ещё {{count}}",
+    },
     permission: {
       plan: "План",
       required: "Требуется разрешение",

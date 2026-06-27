@@ -176,6 +176,15 @@ export const ja: TranslationResources = {
       workedFor: "{{duration}} 作業",
       accessibilityLabel: "{{durationLabel}}、作業トレース",
     },
+    fileChanges: {
+      editedFiles: "{{count}} 件のファイルを編集",
+      createdFiles: "{{count}} 件のファイルを作成",
+      deletedFiles: "{{count}} 件のファイルを削除",
+      changedFiles: "{{count}} 件のファイルを変更",
+      lineChanges: "追加 {{additions}}、削除 {{deletions}}",
+      review: "レビュー",
+      andMore: "他 {{count}} 件",
+    },
     permission: {
       plan: "プラン",
       required: "権限が必要です",

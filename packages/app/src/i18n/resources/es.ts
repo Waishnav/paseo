@@ -176,6 +176,15 @@ export const es: TranslationResources = {
       workedFor: "Trabajó durante {{duration}}",
       accessibilityLabel: "{{durationLabel}}, rastros de trabajo",
     },
+    fileChanges: {
+      editedFiles: "Editó {{count}} archivos",
+      createdFiles: "Creó {{count}} archivos",
+      deletedFiles: "Eliminó {{count}} archivos",
+      changedFiles: "Cambió {{count}} archivos",
+      lineChanges: "{{additions}} adiciones, {{deletions}} eliminaciones",
+      review: "Revisar",
+      andMore: "y {{count}} más",
+    },
     permission: {
       plan: "Plan",
       required: "Permiso requerido",
