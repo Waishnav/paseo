@@ -176,6 +176,15 @@ export const ptBR: TranslationResources = {
       workedFor: "Trabalhou por {{duration}}",
       accessibilityLabel: "{{durationLabel}}, rastros de trabalho",
     },
+    fileChanges: {
+      editedFiles: "Editou {{count}} arquivos",
+      createdFiles: "Criou {{count}} arquivos",
+      deletedFiles: "Excluiu {{count}} arquivos",
+      changedFiles: "Alterou {{count}} arquivos",
+      lineChanges: "{{additions}} adições, {{deletions}} exclusões",
+      review: "Revisar",
+      andMore: "e mais {{count}}",
+    },
     permission: {
       plan: "Plano",
       required: "Permissão necessária",

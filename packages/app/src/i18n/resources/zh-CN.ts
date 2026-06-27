@@ -176,6 +176,15 @@ export const zhCN: TranslationResources = {
       workedFor: "工作了 {{duration}}",
       accessibilityLabel: "{{durationLabel}}，工作记录",
     },
+    fileChanges: {
+      editedFiles: "已编辑 {{count}} 个文件",
+      createdFiles: "已创建 {{count}} 个文件",
+      deletedFiles: "已删除 {{count}} 个文件",
+      changedFiles: "已更改 {{count}} 个文件",
+      lineChanges: "新增 {{additions}}，删除 {{deletions}}",
+      review: "审查",
+      andMore: "另有 {{count}} 个",
+    },
     permission: {
       plan: "Plan",
       required: "需要权限",
